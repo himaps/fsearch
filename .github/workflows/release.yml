@@ -62,7 +62,15 @@ jobs:
       - name: Configure version name
         id: ver
         run: |
-          VERSION="$(git describe --tags --always 2>/dev/null | sed 's/^v//')"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="$(git describe --tags --always 2>/dev/null | sed 's/^v//')"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="$(date +%Y%m%d)-$(git rev-parse --short HEAD 2>/dev/null || echo manual)"
+          fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION}"
 
