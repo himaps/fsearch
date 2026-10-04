@@ -519,7 +519,7 @@ fsearch_application_startup(GApplication *app) {
     set_accel_for_action(app, "app.preferences(uint32 0)", "<control>p");
     set_accel_for_action(app, "win.close_window", "<control>w");
     set_accel_for_action(app, "app.help", "F1");
-    set_accel_for_action(app, "app.switch_file_manager", "<alt>g");
+    set_accel_for_action(app, "app.switch_file_manager", "<control>g");
     set_accels_for_escape(app);
 }
 

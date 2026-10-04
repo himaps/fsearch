@@ -8,7 +8,7 @@
 本 fork 在上游 [cboxdoerfer/fsearch](https://github.com/cboxdoerfer/fsearch) 0.3.x 基础上，为统信 UOS（ARM64）桌面环境增加了三个功能：
 
 1. **快捷键切换窗口显隐**：同一条系统快捷键在"显示 ⇄ 最小化"之间切换窗口（类似 Windows 上 Everything 的 Win+S）。
-2. **快速切回上一次的文件管理器窗口**（类似 Listary）：维护最近使用的文件管理器窗口（dde-file-manager 等）队列，一键切回；配合搜索工作流：FSearch 中搜索 → Alt+G 跳回文件管理器。
+2. **快速切回上一次的文件管理器窗口**（类似 Listary）：维护最近使用的文件管理器窗口（dde-file-manager 等）队列，一键切回；配合搜索工作流：FSearch 中搜索 → Ctrl+G 跳回文件管理器。
 3. **批量重命名**：对选中的搜索结果按表达式批量改名（正则、`#` 计数器、忽略扩展名、预设），详见下文专章。
 
 "打开路径"（在文件管理器中定位文件）使用上游自带的 `org.freedesktop.FileManager1` D-Bus 集成，无需改动。
@@ -68,7 +68,7 @@ sudo ninja -C build install
 FSearch 窗口获得焦点时：
 
 - `F2`：对选中的搜索结果打开批量重命名对话框。
-- `Alt+G`：切回最近使用的文件管理器窗口；多个窗口时连续按键轮转。
+- `Ctrl+G`：切回最近使用的文件管理器窗口；多个窗口时连续按键轮转。
 - `Escape`：最小化窗口（进程常驻）。
 
 全局（UOS 控制中心 → 键盘和语言 → 快捷键 → 添加自定义快捷键）：
@@ -76,7 +76,7 @@ FSearch 窗口获得焦点时：
 | 快捷键建议 | 命令 | 效果 |
 |---|---|---|
 | Ctrl+Alt+S | `fsearch` | FSearch 窗口 显示 ⇄ 最小化 切换 |
-| Ctrl+Alt+G | `fsearch --switch-file-manager`（可简写 `fsearch -g`） | 切回最近使用的文件管理器窗口 |
+| Ctrl+G | `fsearch --switch-file-manager`（可简写 `fsearch -g`） | 切回最近使用的文件管理器窗口。注：全局绑定后会拦截其他应用中的 Ctrl+G；介意可改用 `Ctrl+Alt+G` 等组合 |
 
 注意：
 
