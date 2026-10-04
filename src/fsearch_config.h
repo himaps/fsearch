@@ -56,9 +56,12 @@ struct _FsearchConfig {
 
     // Applications
     char *folder_open_cmd;
+    char *file_manager_window_classes;
 
     // Window
     bool restore_window_size;
+    bool toggle_window_visibility;
+    bool hide_window_on_close;
     int32_t window_width;
     int32_t window_height;
 

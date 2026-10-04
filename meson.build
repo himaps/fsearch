@@ -2,7 +2,7 @@ project(
   'fsearch',
   'c',
   version : '0.3',
-  meson_version : '>= 0.45.0',
+  meson_version : '>= 0.47.0',
   default_options : [
     'c_std=gnu11',
     'channel=other',
@@ -74,10 +74,17 @@ else
   have_inotify = false
 endif
 
+# libwnck is optional: it enables tracking and switching of file manager windows on X11
+wnck_dep = dependency('libwnck-3', version: '>= 3.30', required: get_option('wnck'))
+have_wnck = wnck_dep.found()
+
 config_h = configuration_data()
 config_h.set('HAVE_MALLOC_TRIM', have_malloc_trim)
 config_h.set('HAVE_FANOTIFY', have_fanotify)
 config_h.set('HAVE_INOTIFY', have_inotify)
+if have_wnck
+  config_h.set('HAVE_WNCK', 1)
+endif
 config_h.set_quoted('APP_ID', app_id)
 config_h.set_quoted('PACKAGE_VERSION', meson.project_version())
 config_h.set_quoted('VERSION', meson.project_version())

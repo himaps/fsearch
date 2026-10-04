@@ -3,3 +3,9 @@ option('channel',
        choices: [ 'other', 'AUR-stable', 'AUR-devel', 'copr-stable', 'copr-nightly', 'PPA-stable', 'PPA-nightly', 'snap-stable', 'snap-nightly', 'flathub-stable', 'flathub-nightly', 'OBS-deb-stable', 'OBS-rpm-stable' ],
    description: 'The distribution channel for FSearch',
 )
+
+option('wnck',
+          type: 'feature',
+          value: 'auto',
+   description: 'Track and switch to file manager windows (X11, requires libwnck-3)',
+)

@@ -63,6 +63,7 @@ libfsearch_sources = [
     'fsearch_utf.c',
     'fsearch_window.c',
     'fsearch_window_actions.c',
+    'fsearch_window_tracker.c',
     'fsearch_preview.c',
 ]
 
@@ -81,6 +82,10 @@ fsearch_deps = [
     dependency('libpcre2-8', version: '>= 10.21'),
     dependency('icu-uc', version: '>= 4.4'),
 ]
+
+if have_wnck
+    fsearch_deps += wnck_dep
+endif
 
 fsearch_enums_headers = [
     'fsearch_result.h'

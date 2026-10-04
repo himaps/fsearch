@@ -64,3 +64,6 @@ fsearch_application_get_database_dir(void);
 
 gboolean
 fsearch_application_has_file_manager_on_bus(FsearchApplication *self);
+
+gboolean
+fsearch_application_is_quitting(FsearchApplication *self);

@@ -95,12 +95,15 @@ static const FsearchKeyData SEARCH_SECTION[] = {
 
 static const FsearchKeyData WINDOW_SECTION[] = {
     CONF_BOOL(restore_window_size, true),
+    CONF_BOOL(toggle_window_visibility, true),
+    CONF_BOOL(hide_window_on_close, false),
     CONF_INT(window_width, 850),
     CONF_INT(window_height, 600),
 };
 
 static const FsearchKeyData APPLICATIONS_SECTION[] = {
     CONF_STR(folder_open_cmd, NULL),
+    CONF_STR(file_manager_window_classes, "dde-file-manager,file-manager"),
 };
 
 static const FsearchKeyData INTERFACE_SECTION[] = {
@@ -859,6 +862,9 @@ config_copy(FsearchConfig *config) {
     if (config->folder_open_cmd) {
         copy->folder_open_cmd = g_strdup(config->folder_open_cmd);
     }
+    if (config->file_manager_window_classes) {
+        copy->file_manager_window_classes = g_strdup(config->file_manager_window_classes);
+    }
     if (config->sort_by) {
         copy->sort_by = g_strdup(config->sort_by);
     }
@@ -879,6 +885,7 @@ config_free(FsearchConfig *config) {
     g_assert(config);
 
     g_clear_pointer(&config->folder_open_cmd, g_free);
+    g_clear_pointer(&config->file_manager_window_classes, g_free);
     g_clear_pointer(&config->sort_by, g_free);
     g_clear_pointer(&config->filters, fsearch_filter_manager_unref);
     g_clear_object(&config->includes);

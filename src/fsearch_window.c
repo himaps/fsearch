@@ -1060,6 +1060,15 @@ on_search_entry_activate(GtkButton *widget, gpointer user_data) {
 static gboolean
 on_fsearch_window_delete_event(GtkWidget *widget, GdkEvent *event, gpointer user_data) {
     FsearchApplicationWindow *win = FSEARCH_APPLICATION_WINDOW(widget);
+
+    FsearchConfig *config = fsearch_application_get_config(FSEARCH_APPLICATION_DEFAULT);
+    if (config->hide_window_on_close && !fsearch_application_is_quitting(FSEARCH_APPLICATION_DEFAULT)) {
+        // keep the application running in the background, so it can be brought back with a hotkey
+        // or a second `fsearch` invocation
+        gtk_widget_hide(widget);
+        return TRUE;
+    }
+
     fsearch_application_window_prepare_shutdown(win);
     g_clear_pointer(&widget, gtk_widget_destroy);
     return TRUE;

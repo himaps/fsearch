@@ -30,6 +30,7 @@
 #include "fsearch_preferences_dialog.h"
 #include "fsearch_preview.h"
 #include "fsearch_window.h"
+#include "fsearch_window_tracker.h"
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -56,6 +57,7 @@ struct _FsearchApplication {
     char *option_search_term;
     bool new_window;
     bool minimized;
+    bool quitting;
 
     guint file_manager_watch_id;
     bool has_file_manager_on_bus;
@@ -186,6 +188,11 @@ action_about_activated(GSimpleAction *action, GVariant *parameter, gpointer app)
 
 static void
 action_quit_activated(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    FsearchApplication *self = FSEARCH_APPLICATION(app);
+    // With hide_window_on_close enabled, windows would get hidden instead of closed.
+    // Mark the application as quitting, so windows get destroyed for real.
+    self->quitting = true;
+
     // Close all open windows. This ensures that all refernces to the database will be dropped and the database
     // is properly finalized.
     GList *windows = gtk_application_get_windows(GTK_APPLICATION(app));
@@ -267,6 +274,11 @@ action_update_database_activated(GSimpleAction *action, GVariant *parameter, gpo
 
     g_autoptr(FsearchDatabaseWork) work = fsearch_database_work_new_rescan();
     fsearch_database_queue_work(self->db, work);
+}
+
+static void
+action_switch_file_manager_activated(GSimpleAction *action, GVariant *parameter, gpointer user_data) {
+    fsearch_window_tracker_switch_to_last_file_manager_window();
 }
 
 static void
@@ -474,6 +486,8 @@ fsearch_application_startup(GApplication *app) {
                                                    NULL,
                                                    NULL);
 
+    fsearch_window_tracker_start();
+
     g_autoptr(GtkCssProvider) provider = gtk_css_provider_new();
     gtk_css_provider_load_from_resource(provider, "/io/github/cboxdoerfer/fsearch/ui/shared.css");
     gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
@@ -505,6 +519,7 @@ fsearch_application_startup(GApplication *app) {
     set_accel_for_action(app, "app.preferences(uint32 0)", "<control>p");
     set_accel_for_action(app, "win.close_window", "<control>w");
     set_accel_for_action(app, "app.help", "F1");
+    set_accel_for_action(app, "app.switch_file_manager", "<alt>g");
     set_accels_for_escape(app);
 }
 
@@ -519,6 +534,7 @@ static GActionEntry fsearch_app_entries[] = {
     {"forum", action_forum_activated, NULL, NULL, NULL},
     {"update_database", action_update_database_activated, NULL, NULL, NULL},
     {"cancel_update_database", action_cancel_update_database_activated, NULL, NULL, NULL},
+    {"switch_file_manager", action_switch_file_manager_activated, NULL, NULL, NULL},
     {"preferences", action_preferences_activated, "u", NULL, NULL},
     {"quit", action_quit_activated, NULL, NULL, NULL}};
 
@@ -613,10 +629,29 @@ fsearch_application_activate(GApplication *app) {
     FsearchApplication *self = FSEARCH_APPLICATION(app);
 
     if (!self->new_window) {
-        // If there's already a window make it visible
+        // If there's already a window, toggle its visibility
         FsearchApplicationWindow *window = get_first_application_window(FSEARCH_APPLICATION(app));
         if (window) {
-            show_app_window(self, window, self->minimized);
+            if (self->minimized || !self->config->toggle_window_visibility) {
+                // legacy behaviour: bring the window up, or force-minimize it when --minimized was requested
+                show_app_window(self, window, self->minimized);
+                return;
+            }
+
+            GdkWindow *gdkwin = gtk_widget_get_window(GTK_WIDGET(window));
+            GdkWindowState state = gdkwin ? gdk_window_get_state(gdkwin) : 0;
+            if (gtk_widget_get_visible(GTK_WIDGET(window)) && !(state & GDK_WINDOW_STATE_ICONIFIED)
+                && (state & GDK_WINDOW_STATE_FOCUSED)) {
+                // visible and focused -> minimize it, the application keeps running in the background
+                gtk_window_iconify(GTK_WINDOW(window));
+            }
+            else {
+                // hidden, minimized or in the background -> show and focus it
+                if (state & GDK_WINDOW_STATE_ICONIFIED) {
+                    gtk_window_deiconify(GTK_WINDOW(window));
+                }
+                show_app_window(self, window, FALSE);
+            }
             return;
         }
     }
@@ -654,6 +689,11 @@ fsearch_application_command_line(GApplication *app, GApplicationCommandLine *cmd
 
     if (g_variant_dict_contains(dict, "update-database")) {
         g_action_group_activate_action(G_ACTION_GROUP(self), "update_database", NULL);
+        return 0;
+    }
+
+    if (g_variant_dict_contains(dict, "switch-file-manager")) {
+        g_action_group_activate_action(G_ACTION_GROUP(self), "switch_file_manager", NULL);
         return 0;
     }
 
@@ -808,6 +848,7 @@ fsearch_application_add_option_entries(FsearchApplication *self) {
         {"minimized", 0, 0, G_OPTION_ARG_NONE, NULL, N_("Minimize the application window")},
         {"preferences", 0, 0, G_OPTION_ARG_NONE, NULL, N_("Show the application preferences")},
         {"search", 's', 0, G_OPTION_ARG_STRING, NULL, N_("Set the search pattern"), "PATTERN"},
+        {"switch-file-manager", 'g', 0, G_OPTION_ARG_NONE, NULL, N_("Switch to the most recently used file manager window")},
         {"update-database", 'u', 0, G_OPTION_ARG_NONE, NULL, N_("Update the database and exit")},
         {"version", 'v', 0, G_OPTION_ARG_NONE, NULL, N_("Print version information and exit")},
         {NULL}};
@@ -889,6 +930,12 @@ gboolean
 fsearch_application_has_file_manager_on_bus(FsearchApplication *self) {
     g_assert(FSEARCH_IS_APPLICATION(self));
     return self->has_file_manager_on_bus;
+}
+
+gboolean
+fsearch_application_is_quitting(FsearchApplication *self) {
+    g_assert(FSEARCH_IS_APPLICATION(self));
+    return self->quitting;
 }
 
 FsearchApplication *
