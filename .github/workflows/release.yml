@@ -1,0 +1,81 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-deb:
+    name: Build arm64 deb
+    # GitHub's free arm64 runner produces a native aarch64 build, no cross compilation needed
+    runs-on: ubuntu-24.04-arm
+    # Build inside Debian bullseye (glibc 2.31, glib 2.66, gtk 3.24) so the result
+    # stays compatible with UOS 20's library generation
+    container: debian:bullseye-slim
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq \
+            build-essential meson ninja-build pkg-config git ca-certificates \
+            appstream intltool libtool itstool libxml2-utils \
+            libglib2.0-dev libgtk-3-dev libpcre2-dev libicu-dev libwnck-3-dev
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure version name
+        id: ver
+        run: |
+          VERSION="$(git describe --tags --always 2>/dev/null | sed 's/^v//')"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VERSION}"
+
+      - name: Build
+        run: |
+          meson setup build --prefix=/usr -Dwnck=enabled
+          ninja -C build
+
+      - name: Run tests
+        run: ninja -C build test
+
+      - name: Stage install tree
+        run: |
+          DESTDIR="$PWD/staging" ninja -C build install
+
+      - name: Build deb package
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          PKGDIR="pkg/fsearch_${VERSION}_arm64"
+          mkdir -p "${PKGDIR}/DEBIAN"
+          cp -a staging/. "${PKGDIR}/"
+          cat > "${PKGDIR}/DEBIAN/control" <<EOF
+          Package: fsearch
+          Version: ${VERSION}
+          Architecture: arm64
+          Maintainer: FSearch UOS customization
+          Section: utils
+          Priority: optional
+          Description: A fast file search utility (UOS ARM64 build)
+           GTK3 based file search utility with UOS desktop integrations:
+           hotkey window toggle and file manager window switching.
+           Built without strict Depends; install with "dpkg -i".
+          EOF
+          dpkg-deb --build --root-owner-group "${PKGDIR}"
+
+      - name: Build binary tarball
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          tar -C staging -czf "fsearch_${VERSION}_arm64.tar.gz" .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fsearch-arm64-${{ steps.ver.outputs.version }}
+          path: |
+            pkg/*.deb
+            *.tar.gz
+          if-no-files-found: error
