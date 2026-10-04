@@ -24,7 +24,7 @@ sudo ninja -C build install
 ### GitHub 自动构建
 
 - 每次 push / PR：`.github/workflows/build_test.yml` 自动编译 + 测试。
-- 打 `v*` tag（如 `v0.3.2-uos1`）或手动触发：`.github/workflows/release.yml` 在免费 arm64 runner 上用 debian:bullseye 容器原生编译，产出 `fsearch_<版本>_arm64.deb` 与二进制 tarball（Actions 页面 artifact 下载）。安装：
+- 打 `v*` tag（如 `v0.3.2-uos1`）或手动触发：`.github/workflows/release.yml` 在免费 arm64 runner 上用 debian:bullseye 容器原生编译。**打 tag 时自动创建 GitHub Release 并附上 `fsearch_<版本>_arm64.deb` 与二进制 tarball 下载链接**（仓库右侧 Releases 页面），也可在 Actions 运行页面的 artifact 里下载。安装：
 
   ```bash
   sudo dpkg -i fsearch_*_arm64.deb

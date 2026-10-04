@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-deb:
     name: Build arm64 deb
@@ -70,6 +73,48 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           tar -C staging -czf "fsearch_${VERSION}_arm64.tar.gz" .
+
+      - name: Create GitHub release and upload assets
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          cat > release_notes.md <<'EOF'
+          FSearch UOS ARM64 custom build, based on upstream 0.3.x.
+
+          - Toggle window visibility with a global hotkey (bind `fsearch` in the control center)
+          - Switch back to the last used file manager window (`fsearch --switch-file-manager`)
+          - Batch rename for selected search results (F2): regex, counter, ignore extension, presets
+          - Instant result list refresh after renames
+
+          Install: `sudo dpkg -i fsearch_*_arm64.deb` (no strict Depends, see README_UOS.md)
+          EOF
+          NOTES_JSON=$(sed 's/\\/\\\\/g; s/"/\\"/g' release_notes.md | awk 'BEGIN{ORS=""} {print $0 "\\n"}')
+
+          API="https://api.github.com/repos/${REPO}"
+          AUTH="Authorization: Bearer ${GH_TOKEN}"
+
+          RELEASE_ID=$(curl -sf -X POST -H "$AUTH" -H "Accept: application/vnd.github+json" \
+            "$API/releases" \
+            -d "{\"tag_name\":\"${TAG_NAME}\",\"name\":\"FSearch ${VERSION} (UOS ARM64)\",\"target_commitish\":\"master\",\"body\":\"${NOTES_JSON}\"}" \
+            | grep -o '"id": *[0-9]*' | head -1 | grep -oE '[0-9]+')
+
+          if [ -z "$RELEASE_ID" ]; then
+            # release for this tag already exists: reuse it
+            RELEASE_ID=$(curl -sf -H "$AUTH" -H "Accept: application/vnd.github+json" \
+              "$API/releases/tags/${TAG_NAME}" | grep -o '"id": *[0-9]*' | head -1 | grep -oE '[0-9]+')
+          fi
+          test -n "$RELEASE_ID"
+
+          for ASSET in "pkg/fsearch_${VERSION}_arm64.deb" "fsearch_${VERSION}_arm64.tar.gz"; do
+            curl -sf -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
+              --data-binary @"$ASSET" \
+              "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=$(basename "$ASSET")" > /dev/null
+            echo "uploaded asset: $(basename "$ASSET")"
+          done
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
