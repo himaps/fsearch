@@ -190,6 +190,33 @@ fsearch_file_utils_trash(const char *path, GString *error_messages) {
     return file_remove_or_trash(path, false, error_messages);
 }
 
+bool
+fsearch_file_utils_rename(const char *old_path, const char *new_path, GString *error_messages) {
+    g_return_val_if_fail(old_path, false);
+    g_return_val_if_fail(new_path, false);
+
+    g_autoptr(GFile) src = g_file_new_for_path(old_path);
+    g_autoptr(GFile) dest = g_file_new_for_path(new_path);
+
+    g_autoptr(GError) error = NULL;
+    if (!g_file_move(src, dest, G_FILE_COPY_NONE, NULL, NULL, NULL, &error)) {
+        add_error_message_with_format(error_messages,
+                                      C_("Will be followed by the path of the file.", "Error when renaming file"),
+                                      old_path,
+                                      error ? error->message : _("Unknown error"));
+        return false;
+    }
+    return true;
+}
+
+bool
+fsearch_file_utils_path_exists(const char *path) {
+    g_return_val_if_fail(path, false);
+
+    g_autoptr(GFile) file = g_file_new_for_path(path);
+    return g_file_query_exists(file, NULL);
+}
+
 // Structure to store files (`uris`) which should be opened with the application described by `app_info`
 typedef struct {
     GAppInfo *app_info;

@@ -28,6 +28,7 @@
 #include "fsearch_file_utils.h"
 #include "fsearch_list_view.h"
 #include "fsearch_preview.h"
+#include "fsearch_rename_dialog.h"
 #include "fsearch_statusbar.h"
 #include "fsearch_string_utils.h"
 #include "fsearch_ui_utils.h"
@@ -244,6 +245,227 @@ fsearch_delete_selection(GSimpleAction *action, GVariant *variant, bool delete, 
     if (file_list) {
         g_list_free_full(g_steal_pointer(&file_list), (GDestroyNotify)g_free);
     }
+}
+
+// endregion: rename
+
+// Renames are executed synchronously up to this number of items, larger batches
+// run in a worker thread with a progress dialog
+#define FSEARCH_RENAME_SYNC_MAX 200
+
+typedef struct {
+    FsearchApplicationWindow *window;
+    GPtrArray *old_paths;
+    GPtrArray *new_paths;
+    DynamicArray *done_old_paths;
+    DynamicArray *done_new_paths;
+    GString *error_message;
+    GCancellable *cancellable;
+    GtkWidget *progress_dialog;
+    GtkProgressBar *progress_bar;
+    gint num_completed;
+    gint num_total;
+    guint progress_tick_id;
+} FsearchRenameContext;
+
+static void
+fsearch_rename_context_free(FsearchRenameContext *ctx) {
+    if (!ctx) {
+        return;
+    }
+    if (ctx->progress_tick_id) {
+        g_source_remove(ctx->progress_tick_id);
+    }
+    g_clear_pointer(&ctx->done_old_paths, darray_unref);
+    g_clear_pointer(&ctx->done_new_paths, darray_unref);
+    g_clear_pointer(&ctx->error_message, g_string_free);
+    g_clear_object(&ctx->cancellable);
+    g_clear_pointer(&ctx->old_paths, g_ptr_array_unref);
+    g_clear_pointer(&ctx->new_paths, g_ptr_array_unref);
+    g_clear_pointer(&ctx, free);
+}
+
+static void
+fsearch_rename_queue_database_work(FsearchApplicationWindow *window, DynamicArray *done_old_paths, DynamicArray *done_new_paths) {
+    if (darray_get_num_items(done_old_paths) == 0) {
+        return;
+    }
+
+    g_autoptr(FsearchDatabase) db = fsearch_application_get_db(FSEARCH_APPLICATION_DEFAULT);
+    g_autoptr(FsearchDatabaseWork) work = fsearch_database_work_new_notify_items_renamed(done_old_paths, done_new_paths);
+    fsearch_database_queue_work(db, work);
+}
+
+static void
+fsearch_rename_show_errors(FsearchApplicationWindow *window, GString *error_message) {
+    if (error_message && error_message->len > 0) {
+        ui_utils_run_gtk_dialog_async(GTK_WIDGET(window),
+                                      GTK_MESSAGE_WARNING,
+                                      GTK_BUTTONS_OK,
+                                      _("Something went wrong."),
+                                      error_message->str,
+                                      G_CALLBACK(gtk_widget_destroy),
+                                      NULL);
+    }
+}
+
+static void
+fsearch_rename_files_sync(FsearchApplicationWindow *window, GPtrArray *old_paths, GPtrArray *new_paths) {
+    g_autoptr(GString) error_message = g_string_new(NULL);
+
+    g_autoptr(DynamicArray) done_old_paths = darray_new_full(old_paths->len, g_free);
+    g_autoptr(DynamicArray) done_new_paths = darray_new_full(new_paths->len, g_free);
+
+    for (guint i = 0; i < old_paths->len; ++i) {
+        const char *old_path = g_ptr_array_index(old_paths, i);
+        const char *new_path = g_ptr_array_index(new_paths, i);
+        if (fsearch_file_utils_rename(old_path, new_path, error_message)) {
+            darray_add_item(done_old_paths, g_strdup(old_path));
+            darray_add_item(done_new_paths, g_strdup(new_path));
+        }
+    }
+
+    fsearch_rename_queue_database_work(window, done_old_paths, done_new_paths);
+    fsearch_rename_show_errors(window, error_message);
+}
+
+static void
+fsearch_rename_context_free_on_idle(gpointer user_data) {
+    fsearch_rename_context_free(user_data);
+}
+
+static void
+fsearch_rename_task_done(GObject *source_object, GAsyncResult *result, gpointer user_data) {
+    FsearchRenameContext *ctx = user_data;
+
+    g_task_propagate_boolean(G_TASK(result), NULL);
+
+    if (ctx->progress_dialog) {
+        gtk_widget_destroy(ctx->progress_dialog);
+        ctx->progress_dialog = NULL;
+    }
+
+    fsearch_rename_queue_database_work(ctx->window, ctx->done_old_paths, ctx->done_new_paths);
+    fsearch_rename_show_errors(ctx->window, ctx->error_message);
+
+    g_idle_add(fsearch_rename_context_free_on_idle, ctx);
+}
+
+static void
+fsearch_rename_task_thread(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable) {
+    FsearchRenameContext *ctx = task_data;
+
+    for (guint i = 0; i < ctx->old_paths->len; ++i) {
+        if (g_cancellable_is_cancelled(cancellable)) {
+            break;
+        }
+        const char *old_path = g_ptr_array_index(ctx->old_paths, i);
+        const char *new_path = g_ptr_array_index(ctx->new_paths, i);
+        if (fsearch_file_utils_rename(old_path, new_path, ctx->error_message)) {
+            darray_add_item(ctx->done_old_paths, g_strdup(old_path));
+            darray_add_item(ctx->done_new_paths, g_strdup(new_path));
+        }
+        g_atomic_int_set(&ctx->num_completed, (gint)(i + 1));
+    }
+
+    g_task_return_boolean(task, TRUE);
+}
+
+static gboolean
+fsearch_rename_progress_tick(gpointer user_data) {
+    FsearchRenameContext *ctx = user_data;
+
+    const double fraction = ctx->num_total > 0 ? (double)g_atomic_int_get(&ctx->num_completed) / (double)ctx->num_total
+                                               : 1.0;
+    gtk_progress_bar_set_fraction(ctx->progress_bar, CLAMP(fraction, 0.0, 1.0));
+    return G_SOURCE_CONTINUE;
+}
+
+static void
+on_rename_progress_dialog_response(GtkDialog *dialog, gint response, gpointer user_data) {
+    FsearchRenameContext *ctx = user_data;
+    g_cancellable_cancel(ctx->cancellable);
+}
+
+static void
+fsearch_rename_files_async(FsearchApplicationWindow *window, GPtrArray *old_paths, GPtrArray *new_paths) {
+    FsearchRenameContext *ctx = g_new0(FsearchRenameContext, 1);
+    ctx->window = window;
+    ctx->old_paths = g_ptr_array_ref(old_paths);
+    ctx->new_paths = g_ptr_array_ref(new_paths);
+    ctx->done_old_paths = darray_new_full(old_paths->len, g_free);
+    ctx->done_new_paths = darray_new_full(new_paths->len, g_free);
+    ctx->error_message = g_string_new(NULL);
+    ctx->cancellable = g_cancellable_new();
+    ctx->num_total = (gint)old_paths->len;
+
+    ctx->progress_dialog = gtk_dialog_new_with_buttons(_("Renaming files…"),
+                                                       GTK_WINDOW(window),
+                                                       GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                                       _("_Cancel"),
+                                                       GTK_RESPONSE_CANCEL,
+                                                       NULL);
+    ctx->progress_bar = GTK_PROGRESS_BAR(gtk_progress_bar_new());
+    GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(ctx->progress_dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
+    gtk_box_pack_start(GTK_BOX(content_area), GTK_WIDGET(ctx->progress_bar), FALSE, FALSE, 6);
+    g_signal_connect(ctx->progress_dialog, "response", G_CALLBACK(on_rename_progress_dialog_response), ctx);
+    gtk_widget_show_all(ctx->progress_dialog);
+
+    ctx->progress_tick_id = g_timeout_add(100, fsearch_rename_progress_tick, ctx);
+
+    GTask *task = g_task_new(NULL, ctx->cancellable, fsearch_rename_task_done, ctx);
+    g_task_set_task_data(task, ctx, NULL);
+    g_task_run_in_thread(task, fsearch_rename_task_thread);
+    g_object_unref(task);
+}
+
+static void
+on_rename_dialog_response(GPtrArray *old_paths, GPtrArray *new_paths, gpointer user_data) {
+    FsearchApplicationWindow *self = user_data;
+
+    if (old_paths && new_paths && old_paths->len > 0) {
+        if (old_paths->len > FSEARCH_RENAME_SYNC_MAX) {
+            fsearch_rename_files_async(self, old_paths, new_paths);
+        }
+        else {
+            fsearch_rename_files_sync(self, old_paths, new_paths);
+        }
+    }
+
+    if (old_paths) {
+        g_ptr_array_unref(old_paths);
+    }
+    if (new_paths) {
+        g_ptr_array_unref(new_paths);
+    }
+}
+
+static void
+fsearch_rename_selection(FsearchApplicationWindow *self) {
+    if (fsearch_application_window_get_num_selected(self) == 0) {
+        return;
+    }
+
+    // The selection is unordered, so the paths are sorted to get a stable order
+    // for the rename dialog
+    GList *file_list = NULL;
+    fsearch_application_window_selection_for_each(self, prepend_full_path_to_list, &file_list);
+    file_list = g_list_sort(file_list, (GCompareFunc)fsearch_file_utils_cmp_paths);
+
+    GPtrArray *old_paths = g_ptr_array_new_with_free_func(g_free);
+    for (GList *f = file_list; f != NULL; f = f->next) {
+        g_ptr_array_add(old_paths, g_strdup(f->data));
+    }
+    g_list_free_full(g_steal_pointer(&file_list), (GDestroyNotify)g_free);
+
+    fsearch_rename_dialog_run(GTK_WINDOW(self), old_paths, on_rename_dialog_response, self);
+}
+
+static void
+fsearch_window_action_rename(GSimpleAction *action, GVariant *variant, gpointer user_data) {
+    FsearchApplicationWindow *self = user_data;
+    fsearch_rename_selection(self);
 }
 
 static void
@@ -909,6 +1131,7 @@ static GActionEntry FsearchWindowActions[] = {
     {"file_properties", fsearch_window_action_file_properties},
     {"move_to_trash", fsearch_window_action_move_to_trash},
     {"delete_selection", fsearch_window_action_delete},
+    {"rename", fsearch_window_action_rename},
     {"select_all", fsearch_window_action_select_all},
     {"deselect_all", fsearch_window_action_deselect_all},
     {"invert_selection", fsearch_window_action_invert_selection},
@@ -957,6 +1180,7 @@ fsearch_window_actions_update(FsearchApplicationWindow *self) {
     action_set_enabled(group, "delete_selection", FALSE);
     action_set_enabled(group, "file_properties", has_file_manager_on_bus && num_rows_selected >= 1 ? TRUE : FALSE);
     action_set_enabled(group, "move_to_trash", num_rows_selected);
+    action_set_enabled(group, "rename", num_rows_selected);
     action_set_enabled(group, "open", num_rows_selected);
     action_set_enabled(group, "open_with", num_rows_selected >= 1 ? TRUE : FALSE);
     action_set_enabled(group, "open_with_other", num_rows_selected >= 1 ? TRUE : FALSE);

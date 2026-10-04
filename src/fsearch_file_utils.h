@@ -39,6 +39,12 @@ fsearch_file_utils_trash(const char *path, GString *error_messages);
 bool
 fsearch_file_utils_remove(const char *path, GString *error_messages);
 
+bool
+fsearch_file_utils_rename(const char *old_path, const char *new_path, GString *error_messages);
+
+bool
+fsearch_file_utils_path_exists(const char *path);
+
 void
 fsearch_file_utils_open_path_list(GList *paths,
                                   bool launch_desktop_files,

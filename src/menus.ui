@@ -231,6 +231,14 @@
                 <attribute name="icon">edit-cut</attribute>
             </item>
         </section>
+        <section id="fsearch_listview_menu_rename_section">
+            <item>
+                <attribute name="label" translatable="yes">_Rename…</attribute>
+                <attribute name="action">win.rename</attribute>
+                <attribute name="accel">F2</attribute>
+                <attribute name="icon">document-edit-symbolic</attribute>
+            </item>
+        </section>
         <section id="fsearch_listview_menu_delete_section">
             <item>
                 <attribute name="label" translatable="yes">Move to _Trash</attribute>

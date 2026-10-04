@@ -53,6 +53,8 @@ libfsearch_sources = [
     'fsearch_query_lexer.c',
     'fsearch_query_parser.c',
     'fsearch_query_tree.c',
+    'fsearch_rename_dialog.c',
+    'fsearch_rename_engine.c',
     'fsearch_result_view.c',
     'fsearch_selection.c',
     'fsearch_size_utils.c',
