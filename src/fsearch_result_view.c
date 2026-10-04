@@ -11,8 +11,41 @@
 #include <glib/gi18n.h>
 #include <gtk/gtk.h>
 #include <math.h>
+#include <pango/pangocairo.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
+
+// WCAG relative luminance based contrast ratio; below this threshold the custom
+// striped row text color would be unreadable, so it falls back to the theme color
+#define FSEARCH_ZEBRA_MIN_CONTRAST 3.0
+
+// composites `fg` over an opaque `bg`
+static void
+zebra_blend(const GdkRGBA *fg, const GdkRGBA *bg, GdkRGBA *out) {
+    out->red = fg->alpha * fg->red + (1.0 - fg->alpha) * bg->red;
+    out->green = fg->alpha * fg->green + (1.0 - fg->alpha) * bg->green;
+    out->blue = fg->alpha * fg->blue + (1.0 - fg->alpha) * bg->blue;
+    out->alpha = 1.0;
+}
+
+static double
+zebra_relative_luminance(const GdkRGBA *c) {
+    double linear[3];
+    const double rgb[3] = {c->red, c->green, c->blue};
+    for (int i = 0; i < 3; i++) {
+        linear[i] = rgb[i] <= 0.03928 ? rgb[i] / 12.92 : pow((rgb[i] + 0.055) / 1.055, 2.4);
+    }
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+static double
+zebra_contrast_ratio(const GdkRGBA *a, const GdkRGBA *b) {
+    const double la = zebra_relative_luminance(a);
+    const double lb = zebra_relative_luminance(b);
+    return (MAX(la, lb) + 0.05) / (MIN(la, lb) + 0.05);
+}
 
 static int32_t
 get_icon_size_for_height(int32_t height) {
@@ -354,8 +387,60 @@ fsearch_result_view_draw_row(FsearchResultView *result_view,
     gtk_style_context_save(context);
     gtk_style_context_set_state(context, flags);
 
+    FsearchConfig *config = fsearch_application_get_config(FSEARCH_APPLICATION_DEFAULT);
+
     // Render row background
     gtk_render_background(context, cr, rect->x, rect->y, rect->width, rect->height);
+
+    // Striped rows: paint every second display row with a configurable tint.
+    // Selected rows keep their theme rendering, stripes follow the display order
+    // (rows sit on a fixed height grid, so the y offset determines the parity).
+    gboolean zebra_active = FALSE;
+    GdkRGBA zebra_background = {0};
+    gboolean zebra_text_active = FALSE;
+    GdkRGBA zebra_text_color = {0};
+    if (config->show_zebra_stripes && !row_selected && rect->height > 0 && ((int)(rect->y / rect->height)) % 2 != 0) {
+        zebra_active = TRUE;
+
+        GdkRGBA theme_foreground = {0};
+        GdkRGBA theme_background = {0};
+        gtk_style_context_get_color(context, flags, &theme_foreground);
+        gtk_style_context_get_background_color(context, flags, &theme_background);
+        if (theme_background.alpha < 0.001) {
+            // themes which don't define a background color: assume mid gray for
+            // the contrast computation below
+            theme_background.red = theme_background.green = theme_background.blue = 0.5;
+            theme_background.alpha = 1.0;
+        }
+
+        if (config->zebra_background_color && strcmp(config->zebra_background_color, "auto") != 0
+            && gdk_rgba_parse(&zebra_background, config->zebra_background_color)) {
+            // custom stripe color as configured
+        }
+        else {
+            // auto: subtle tint derived from the theme foreground
+            zebra_background = theme_foreground;
+            zebra_background.alpha = 0.05;
+        }
+
+        if (config->zebra_text_color && strcmp(config->zebra_text_color, "auto") != 0
+            && gdk_rgba_parse(&zebra_text_color, config->zebra_text_color)) {
+            // only use the custom text color when it stays readable on top of the
+            // effective (composited) stripe background
+            GdkRGBA stripe_on_theme = {0};
+            zebra_blend(&zebra_background, &theme_background, &stripe_on_theme);
+            zebra_text_active = zebra_contrast_ratio(&stripe_on_theme, &zebra_text_color) >= FSEARCH_ZEBRA_MIN_CONTRAST;
+        }
+    }
+
+    if (zebra_active) {
+        cairo_save(cr);
+        gdk_cairo_set_source_rgba(cr, &zebra_background);
+        cairo_rectangle(cr, rect->x, rect->y, rect->width, rect->height);
+        cairo_fill(cr);
+        cairo_restore(cr);
+    }
+
     if (row_hovered) {
         GdkRGBA color = {};
         gtk_style_context_get_color(context, flags, &color);
@@ -367,8 +452,6 @@ fsearch_result_view_draw_row(FsearchResultView *result_view,
         cairo_fill(cr);
         cairo_restore(cr);
     }
-
-    FsearchConfig *config = fsearch_application_get_config(FSEARCH_APPLICATION_DEFAULT);
 
     // Render row foreground
     int32_t x = rect->x;
@@ -485,7 +568,15 @@ fsearch_result_view_draw_row(FsearchResultView *result_view,
         pango_layout_set_width(layout, (column->effective_width - 2 * ROW_PADDING_X - dw) * PANGO_SCALE);
         pango_layout_set_alignment(layout, column->alignment);
         pango_layout_set_ellipsize(layout, column->ellipsize_mode);
-        gtk_render_layout(context, cr, x + ROW_PADDING_X + dx, rect->y + ROW_PADDING_Y, layout);
+        if (zebra_text_active) {
+            // custom text color: draw the layout directly so the stripe text color
+            // applies, search term highlight attributes (if any) still take effect
+            gdk_cairo_set_source_rgba(cr, &zebra_text_color);
+            pango_cairo_show_layout(cr, x + ROW_PADDING_X + dx, rect->y + ROW_PADDING_Y, layout);
+        }
+        else {
+            gtk_render_layout(context, cr, x + ROW_PADDING_X + dx, rect->y + ROW_PADDING_Y, layout);
+        }
         x += column->effective_width;
         cairo_restore(cr);
     }

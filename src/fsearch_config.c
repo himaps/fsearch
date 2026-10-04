@@ -113,6 +113,9 @@ static const FsearchKeyData INTERFACE_SECTION[] = {
     CONF_BOOL(launch_desktop_files, true),
     CONF_BOOL(enable_dark_theme, false),
     CONF_BOOL(enable_list_tooltips, true),
+    CONF_BOOL(show_zebra_stripes, false),
+    CONF_STR(zebra_background_color, "auto"),
+    CONF_STR(zebra_text_color, "auto"),
     CONF_BOOL(restore_column_config, true),
     CONF_BOOL(restore_sort_order, true),
     CONF_BOOL(double_click_path, false),
@@ -926,7 +929,9 @@ config_cmp(FsearchConfig *c1, FsearchConfig *c2) {
         result.search_config_changed = true;
     }
     if (c1->highlight_search_terms != c2->highlight_search_terms || c1->show_listview_icons != c2->show_listview_icons
-        || c1->single_click_open != c2->single_click_open || c1->enable_list_tooltips != c2->enable_list_tooltips) {
+        || c1->single_click_open != c2->single_click_open || c1->enable_list_tooltips != c2->enable_list_tooltips
+        || c1->show_zebra_stripes != c2->show_zebra_stripes || g_strcmp0(c1->zebra_background_color, c2->zebra_background_color) != 0
+        || g_strcmp0(c1->zebra_text_color, c2->zebra_text_color) != 0) {
         result.listview_config_changed = true;
     }
 
@@ -949,6 +954,12 @@ config_copy(FsearchConfig *config) {
 
     if (config->folder_open_cmd) {
         copy->folder_open_cmd = g_strdup(config->folder_open_cmd);
+    }
+    if (config->zebra_background_color) {
+        copy->zebra_background_color = g_strdup(config->zebra_background_color);
+    }
+    if (config->zebra_text_color) {
+        copy->zebra_text_color = g_strdup(config->zebra_text_color);
     }
     if (config->file_manager_window_classes) {
         copy->file_manager_window_classes = g_strdup(config->file_manager_window_classes);
@@ -979,6 +990,8 @@ config_free(FsearchConfig *config) {
     g_assert(config);
 
     g_clear_pointer(&config->folder_open_cmd, g_free);
+    g_clear_pointer(&config->zebra_background_color, g_free);
+    g_clear_pointer(&config->zebra_text_color, g_free);
     g_clear_pointer(&config->file_manager_window_classes, g_free);
     g_clear_pointer(&config->sort_by, g_free);
     g_clear_pointer(&config->filters, fsearch_filter_manager_unref);

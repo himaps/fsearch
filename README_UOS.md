@@ -63,6 +63,16 @@ sudo ninja -C build install
 
 已知限制：改名后不再匹配当前搜索词的结果会从列表中消失（与 Everything 一致）；对 NTFS/FAT 挂载盘建议避免在替换结果中使用 `\/:*?"<>|` 等字符（预览中会标红）。
 
+## 行交错显示（斑马纹）与颜色设置
+
+偏好设置 → 界面 → **Results:** 区新增：
+
+- **Show striped rows**：开启后结果列表奇偶行交错显示底色（默认关闭）。
+- **Striped row background**：交错行背景色。勾选 **Auto**（默认）时从主题前景色自动混出 5% 透明度的浅色，深/浅色主题都自适应；取消 Auto 可用调色盘自选颜色（支持透明度）。
+- **Striped row text**：交错行文字颜色，默认 Auto（不改文字）。自定义后若与实际背景的对比度不足 3:1（WCAG），绘制时自动回退主题文字色，避免"改了背景色文字看不清"。
+
+选中行、悬停高亮仍由主题渲染，优先级高于斑马纹。以上改动保存后立即生效，无需重启。对应的配置文件键（`~/.config/fsearch/fsearch.conf` 的 `[Interface]` 节）：`show_zebra_stripes`、`zebra_background_color`（`auto` 或 `rgb(r,g,b)`/`rgba(r,g,b,a)`）、`zebra_text_color`。
+
 ## 快捷键使用方法（应用内）
 
 FSearch 窗口获得焦点时：

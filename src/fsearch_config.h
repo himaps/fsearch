@@ -73,6 +73,9 @@ struct _FsearchConfig {
     bool launch_desktop_files;
     bool enable_dark_theme;
     bool enable_list_tooltips;
+    bool show_zebra_stripes;
+    char *zebra_background_color;
+    char *zebra_text_color;
     bool restore_column_config;
     bool restore_sort_order;
     bool double_click_path;

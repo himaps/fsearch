@@ -11,6 +11,7 @@
 #include <glib/gi18n.h>
 #include <gtk/gtk.h>
 #include <stdio.h>
+#include <string.h>
 
 struct _FsearchPreferencesDialog {
     GtkDialog parent_instance;
@@ -44,6 +45,11 @@ struct _FsearchPreferencesDialog {
     GtkToggleButton *show_icons_button;
     GtkToggleButton *highlight_search_terms;
     GtkToggleButton *show_base_2_units;
+    GtkToggleButton *zebra_stripes_button;
+    GtkColorButton *zebra_background_color_button;
+    GtkToggleButton *zebra_background_auto_button;
+    GtkColorButton *zebra_text_color_button;
+    GtkToggleButton *zebra_text_auto_button;
     GtkComboBox *action_after_file_open;
     GtkToggleButton *action_after_file_open_keyboard;
     GtkToggleButton *action_after_file_open_mouse;
@@ -64,6 +70,17 @@ struct _FsearchPreferencesDialog {
 enum { PROP_0, PROP_CONFIG, NUM_PROPERTIES };
 
 static GParamSpec *properties[NUM_PROPERTIES];
+
+static void
+fsearch_preferences_dialog_update_zebra_sensitivity(FsearchPreferencesDialog *self) {
+    const gboolean stripes = gtk_toggle_button_get_active(self->zebra_stripes_button);
+    gtk_widget_set_sensitive(GTK_WIDGET(self->zebra_background_color_button),
+                             stripes && !gtk_toggle_button_get_active(self->zebra_background_auto_button));
+    gtk_widget_set_sensitive(GTK_WIDGET(self->zebra_background_auto_button), stripes);
+    gtk_widget_set_sensitive(GTK_WIDGET(self->zebra_text_color_button),
+                             stripes && !gtk_toggle_button_get_active(self->zebra_text_auto_button));
+    gtk_widget_set_sensitive(GTK_WIDGET(self->zebra_text_auto_button), stripes);
+}
 
 G_DEFINE_TYPE(FsearchPreferencesDialog, fsearch_preferences_dialog, GTK_TYPE_DIALOG)
 
@@ -140,6 +157,25 @@ update_config(FsearchPreferencesDialog *self) {
     self->config->show_listview_icons = gtk_toggle_button_get_active(self->show_icons_button);
     self->config->highlight_search_terms = gtk_toggle_button_get_active(self->highlight_search_terms);
     self->config->show_base_2_units = gtk_toggle_button_get_active(self->show_base_2_units);
+
+    self->config->show_zebra_stripes = gtk_toggle_button_get_active(self->zebra_stripes_button);
+    GdkRGBA zebra_color = {0};
+    g_clear_pointer(&self->config->zebra_background_color, g_free);
+    if (gtk_toggle_button_get_active(self->zebra_background_auto_button)) {
+        self->config->zebra_background_color = g_strdup("auto");
+    }
+    else {
+        gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(self->zebra_background_color_button), &zebra_color);
+        self->config->zebra_background_color = gdk_rgba_to_string(&zebra_color);
+    }
+    g_clear_pointer(&self->config->zebra_text_color, g_free);
+    if (gtk_toggle_button_get_active(self->zebra_text_auto_button)) {
+        self->config->zebra_text_color = g_strdup("auto");
+    }
+    else {
+        gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(self->zebra_text_color_button), &zebra_color);
+        self->config->zebra_text_color = gdk_rgba_to_string(&zebra_color);
+    }
     self->config->action_after_file_open_keyboard = gtk_toggle_button_get_active(self->action_after_file_open_keyboard);
     self->config->action_after_file_open_mouse = gtk_toggle_button_get_active(self->action_after_file_open_mouse);
     self->config->show_indexing_status = gtk_toggle_button_get_active(self->show_indexing_status_button);
@@ -229,6 +265,21 @@ fsearch_preferences_dialog_constructed(GObject *object) {
 
     G_OBJECT_CLASS(fsearch_preferences_dialog_parent_class)->constructed(object);
 
+    fsearch_preferences_dialog_update_zebra_sensitivity(self);
+
+    g_signal_connect_swapped(self->zebra_stripes_button,
+                             "toggled",
+                             G_CALLBACK(fsearch_preferences_dialog_update_zebra_sensitivity),
+                             self);
+    g_signal_connect_swapped(self->zebra_background_auto_button,
+                             "toggled",
+                             G_CALLBACK(fsearch_preferences_dialog_update_zebra_sensitivity),
+                             self);
+    g_signal_connect_swapped(self->zebra_text_auto_button,
+                             "toggled",
+                             G_CALLBACK(fsearch_preferences_dialog_update_zebra_sensitivity),
+                             self);
+
     self->filter_pref_widget = fsearch_filter_preferences_widget_new(self->config_old->filters);
     gtk_container_add(GTK_CONTAINER(self->filter_frame), GTK_WIDGET(self->filter_pref_widget));
     gtk_widget_show(GTK_WIDGET(self->filter_pref_widget));
@@ -252,6 +303,31 @@ fsearch_preferences_dialog_constructed(GObject *object) {
     gtk_toggle_button_set_active(self->show_icons_button, self->config_old->show_listview_icons);
     gtk_toggle_button_set_active(self->highlight_search_terms, self->config_old->highlight_search_terms);
     gtk_toggle_button_set_active(self->show_base_2_units, self->config_old->show_base_2_units);
+
+    GdkRGBA zebra_color = {0};
+    gtk_toggle_button_set_active(self->zebra_stripes_button, self->config_old->show_zebra_stripes);
+    const gboolean bg_auto = !self->config_old->zebra_background_color
+                             || strcmp(self->config_old->zebra_background_color, "auto") == 0
+                             || !gdk_rgba_parse(&zebra_color, self->config_old->zebra_background_color);
+    gtk_toggle_button_set_active(self->zebra_background_auto_button, bg_auto);
+    if (bg_auto) {
+        GdkRGBA placeholder = {0.5, 0.5, 0.5, 0.05};
+        gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(self->zebra_background_color_button), &placeholder);
+    }
+    else {
+        gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(self->zebra_background_color_button), &zebra_color);
+    }
+    const gboolean text_auto = !self->config_old->zebra_text_color
+                               || strcmp(self->config_old->zebra_text_color, "auto") == 0
+                               || !gdk_rgba_parse(&zebra_color, self->config_old->zebra_text_color);
+    gtk_toggle_button_set_active(self->zebra_text_auto_button, text_auto);
+    if (text_auto) {
+        GdkRGBA placeholder = {0, 0, 0, 1};
+        gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(self->zebra_text_color_button), &placeholder);
+    }
+    else {
+        gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(self->zebra_text_color_button), &zebra_color);
+    }
     gtk_toggle_button_set_active(self->action_after_file_open_keyboard,
                                  self->config_old->action_after_file_open_keyboard);
     gtk_toggle_button_set_active(self->action_after_file_open_mouse, self->config_old->action_after_file_open_mouse);
@@ -306,6 +382,11 @@ fsearch_preferences_dialog_class_init(FsearchPreferencesDialogClass *klass) {
     gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, show_icons_button);
     gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, highlight_search_terms);
     gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, show_base_2_units);
+    gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, zebra_stripes_button);
+    gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, zebra_background_color_button);
+    gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, zebra_background_auto_button);
+    gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, zebra_text_color_button);
+    gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, zebra_text_auto_button);
     gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, action_after_file_open);
     gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, action_after_file_open_keyboard);
     gtk_widget_class_bind_template_child(widget_class, FsearchPreferencesDialog, action_after_file_open_mouse);

@@ -275,7 +275,7 @@
                               <object class="GtkCellRendererText"/>
                               <attributes>
                                 <attribute name="text">0</attribute>
-                                <attribute name="foreground" name="1"/>
+                                <attribute name="foreground">1</attribute>
                               </attributes>
                             </child>
                           </object>
