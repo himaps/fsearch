@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 env:
   # The bookworm-slim container's pkg-config does not search the multiarch
   # pkgconfig directory on its own
@@ -38,7 +42,7 @@ jobs:
             sleep 20
           done
           apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
-            build-essential meson ninja-build pkg-config git ca-certificates \
+            build-essential meson ninja-build pkg-config git curl ca-certificates \
             appstream intltool libtool itstool libxml2-utils \
             libglib2.0-dev libgtk-3-dev libpcre2-dev libicu-dev \
             libstartup-notification0-dev libxres-dev
