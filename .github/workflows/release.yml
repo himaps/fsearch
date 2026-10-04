@@ -22,12 +22,13 @@ jobs:
       - name: Install build dependencies
         run: |
           set -e
-          # Route the security suite to its origin host: the CDN in front of
-          # deb.debian.org has served stale package indexes with 404ing versions.
-          # Plain http is used because the slim image has no CA certificates yet.
-          sed -i 's|http://deb.debian.org/debian-security|http://security.debian.org/debian-security|g' /etc/apt/sources.list || true
+          # bullseye is oldoldstable now: its security suite is being dismantled
+          # (the index lists versions whose .debs were removed from the pool, so
+          # installs fail with 404s). The build dependencies all come from
+          # bullseye main and bullseye-updates, which are still fully served.
+          sed -i '/debian-security/d' /etc/apt/sources.list || true
           if [ -f /etc/apt/sources.list.d/debian.sources ]; then
-            sed -i 's|http://deb.debian.org/debian-security|http://security.debian.org/debian-security|g' /etc/apt/sources.list.d/debian.sources
+            sed -i '/debian-security/d' /etc/apt/sources.list.d/debian.sources
           fi
           for attempt in 1 2 3 4; do
             if apt-get update; then
