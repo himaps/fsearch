@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+env:
+  # The bookworm-slim container's pkg-config does not search the multiarch
+  # pkgconfig directory on its own
+  PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+
 jobs:
   build-deb:
     name: Build arm64 deb
