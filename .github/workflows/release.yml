@@ -44,7 +44,7 @@ jobs:
           # libwnck-3 was removed from Debian bookworm, but UOS/deepin ships it
           # and it powers the file manager window switcher feature
           git clone --depth 1 --branch 43.0 https://gitlab.gnome.org/GNOME/libwnck.git /tmp/libwnck
-          meson setup /tmp/libwnck/build /tmp/libwnck --prefix=/usr -Dgtk_doc=false
+          meson setup /tmp/libwnck/build /tmp/libwnck --prefix=/usr -Dgtk_doc=false -Dintrospection=false
           ninja -C /tmp/libwnck/build
           ninja -C /tmp/libwnck/build install
           ldconfig
