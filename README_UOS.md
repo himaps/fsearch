@@ -1,9 +1,15 @@
 # FSearch UOS 定制版说明
 
-本 fork 在上游 [cboxdoerfer/fsearch](https://github.com/cboxdoerfer/fsearch) 0.3.x 基础上，为统信 UOS（ARM64）桌面环境增加了两个功能：
+**最新版本下载（arm64 deb）**：[v0.3.2-uos1 Release](https://github.com/himaps/fsearch/releases/tag/v0.3.2-uos1) ·
+[直接下载 deb](https://github.com/himaps/fsearch/releases/download/v0.3.2-uos1/fsearch_0.3.2-uos1_arm64.deb)
+
+安装：`sudo dpkg -i fsearch_*.deb`（CI 产物基于 bookworm/glibc 2.36，老 UOS V20 设备请用下面的本机编译）。
+
+本 fork 在上游 [cboxdoerfer/fsearch](https://github.com/cboxdoerfer/fsearch) 0.3.x 基础上，为统信 UOS（ARM64）桌面环境增加了三个功能：
 
 1. **快捷键切换窗口显隐**：同一条系统快捷键在"显示 ⇄ 最小化"之间切换窗口（类似 Windows 上 Everything 的 Win+S）。
 2. **快速切回上一次的文件管理器窗口**（类似 Listary）：维护最近使用的文件管理器窗口（dde-file-manager 等）队列，一键切回；配合搜索工作流：FSearch 中搜索 → Alt+G 跳回文件管理器。
+3. **批量重命名**：对选中的搜索结果按表达式批量改名（正则、`#` 计数器、忽略扩展名、预设），详见下文专章。
 
 "打开路径"（在文件管理器中定位文件）使用上游自带的 `org.freedesktop.FileManager1` D-Bus 集成，无需改动。
 

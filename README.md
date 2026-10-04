@@ -1,7 +1,21 @@
-![Build Status](https://github.com/cboxdoerfer/fsearch/actions/workflows/build_test.yml/badge.svg)
+![Build Status](https://github.com/himaps/fsearch/actions/workflows/build_test.yml/badge.svg)
 [![Translation status](https://hosted.weblate.org/widgets/fsearch/-/svg-badge.svg)](https://hosted.weblate.org/engage/fsearch/?utm_source=widget)
 
 FSearch is a fast file search utility, inspired by Everything Search Engine. It's written in C and based on GTK3.
+
+> [!NOTE]
+> **UOS / Deepin customized fork.** This fork of [cboxdoerfer/fsearch](https://github.com/cboxdoerfer/fsearch)
+> adds features for UOS (统信) / Deepin desktops on top of upstream 0.3.x:
+>
+> - **Global hotkey window toggle** — bind a system shortcut (e.g. `Ctrl+Alt+S`) to `fsearch` and toggle
+>   the window between shown and minimized
+> - **Switch back to the last used file manager window** — `Alt+G` inside FSearch, or bind
+>   `fsearch --switch-file-manager` as a global shortcut (Listary-style)
+> - **Batch rename for selected search results** (F2) — literal/regex expressions, `#` counter,
+>   ignore-extension mode, presets, conflict marking and instant result list refresh
+>
+> Prebuilt **arm64 deb** packages: [Releases](https://github.com/himaps/fsearch/releases) ·
+> 中文使用说明：[README_UOS.md](README_UOS.md)
 
 * For bug reports and feature requests please use the issue tracker: <https://github.com/cboxdoerfer/fsearch/issues>
 * For discussions and questions about FSearch use the discussion
