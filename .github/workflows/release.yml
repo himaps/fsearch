@@ -14,22 +14,14 @@ jobs:
     name: Build arm64 deb
     # GitHub's free arm64 runner produces a native aarch64 build, no cross compilation needed
     runs-on: ubuntu-24.04-arm
-    # Build inside Debian bullseye (glibc 2.31, glib 2.66, gtk 3.24) so the result
-    # stays compatible with UOS 20's library generation
-    container: debian:bullseye-slim
+    # Build inside Debian bookworm (current oldstable, fully served): glib 2.74,
+    # gtk 3.24, glibc 2.36. For very old UOS 20 devices prefer an on-device build.
+    container: debian:bookworm-slim
 
     steps:
       - name: Install build dependencies
         run: |
           set -e
-          # bullseye is oldoldstable now: its security suite is being dismantled
-          # (the index lists versions whose .debs were removed from the pool, so
-          # installs fail with 404s). The build dependencies all come from
-          # bullseye main and bullseye-updates, which are still fully served.
-          sed -i '/debian-security/d' /etc/apt/sources.list || true
-          if [ -f /etc/apt/sources.list.d/debian.sources ]; then
-            sed -i '/debian-security/d' /etc/apt/sources.list.d/debian.sources
-          fi
           for attempt in 1 2 3 4; do
             if apt-get update; then
               break

@@ -24,13 +24,13 @@ sudo ninja -C build install
 ### GitHub 自动构建
 
 - 每次 push / PR：`.github/workflows/build_test.yml` 自动编译 + 测试。
-- 打 `v*` tag（如 `v0.3.2-uos1`）或手动触发：`.github/workflows/release.yml` 在免费 arm64 runner 上用 debian:bullseye 容器原生编译。**打 tag 时自动创建 GitHub Release 并附上 `fsearch_<版本>_arm64.deb` 与二进制 tarball 下载链接**（仓库右侧 Releases 页面），也可在 Actions 运行页面的 artifact 里下载。安装：
+- 打 `v*` tag（如 `v0.3.2-uos1`）或手动触发：`.github/workflows/release.yml` 在免费 arm64 runner 上用 debian:bookworm 容器原生编译，**tag 触发时自动创建 GitHub Release 并附上 `fsearch_<版本>_arm64.deb` 与二进制 tarball 下载链接**（仓库右侧 Releases 页面），也可在 Actions 运行页面的 artifact 里下载。安装：
 
   ```bash
   sudo dpkg -i fsearch_*_arm64.deb
   ```
 
-  deb 不声明严格依赖（构建发行版库版本与 UOS 不同）；运行库（libgtk-3-0、libglib2.0-0、libpcre2-8-0、libicu、libwnck-3-0）UOS 桌面版均自带。若目标设备的 glibc 低于 2.31，请改用上面的本机编译。
+  deb 不声明严格依赖（构建发行版库版本与 UOS 不同）；运行库（libgtk-3-0、libglib2.0-0、libpcre2-8-0、libicu、libwnck-3-0）UOS 桌面版均自带。CI 产物基于 bookworm（glibc 2.36），**较老的 UOS V20 设备（glibc 2.28 时代）请改用上面的本机编译**。
 
 ## 新增配置项（`~/.config/fsearch/fsearch.conf`）
 
