@@ -885,6 +885,155 @@ fsearch_database_index_remove_path(FsearchDatabaseIndex *self, const char *path,
     return false;
 }
 
+bool
+fsearch_database_index_rename_path(FsearchDatabaseIndex *self, const char *path, const char *new_name) {
+    g_return_val_if_fail(self, false);
+    g_return_val_if_fail(path, false);
+    g_return_val_if_fail(new_name && new_name[0] != '\0', false);
+
+    g_autoptr(GMutexLocker) locker = g_mutex_locker_new(&self->mutex);
+
+    // Renaming the root of an index is not supported
+    const char *root_path = fsearch_database_include_get_path(self->include);
+    if (g_strcmp0(path, root_path) == 0) {
+        g_debug("[index-%s] rename_path: renaming the index root is not supported: %s",
+                fsearch_database_index_get_path(self),
+                path);
+        return false;
+    }
+
+    // Find the old entry: try files first, then folders
+    FsearchDatabaseEntry *entry = NULL;
+    bool entry_is_folder = false;
+
+    FsearchDatabaseEntry *dummy = create_dummy_entry_chain(root_path, path, DATABASE_ENTRY_TYPE_FILE);
+    if (dummy) {
+        entry = fsearch_database_chunked_array_steal(self->file_chunks, dummy);
+        g_clear_pointer(&dummy, db_entry_free_full);
+    }
+    if (!entry) {
+        dummy = create_dummy_entry_chain(root_path, path, DATABASE_ENTRY_TYPE_FOLDER);
+        if (dummy) {
+            entry = fsearch_database_chunked_array_steal(self->folder_chunks, dummy);
+            g_clear_pointer(&dummy, db_entry_free_full);
+            entry_is_folder = entry != NULL;
+        }
+    }
+    if (!entry) {
+        return false;
+    }
+
+    // The parent folder entry survives the removal of the old entry
+    FsearchDatabaseEntry *parent = db_entry_get_parent(entry);
+
+    g_autofree char *dir_path = g_path_get_dirname(path);
+    g_autofree char *new_path = g_build_filename(dir_path, new_name, NULL);
+
+    off_t size = 0;
+    time_t mtime = 0;
+    bool is_dir = false;
+    if (!fsearch_file_utils_get_info(new_path, &mtime, &size, &is_dir) || is_dir != entry_is_folder) {
+        // The renamed entry vanished from disk or changed its type unexpectedly:
+        // drop it from the database, the next rescan will reconcile.
+        g_debug("[index-%s] rename_path: renamed entry no longer on disk: %s",
+                fsearch_database_index_get_path(self),
+                new_path);
+        if (entry_is_folder) {
+            remove_and_free_folder_entry_locked(self, entry, NULL);
+        }
+        else {
+            remove_and_free_file_entry_locked(self, entry, NULL);
+        }
+        return true;
+    }
+
+    // If the new name is excluded by the exclude rules, only the old entry is removed.
+    // This way the database matches what's on disk.
+    if (fsearch_database_exclude_manager_excludes(self->exclude_manager, new_path, new_name, is_dir)) {
+        g_debug("[index-%s] rename_path: new name excluded: %s", fsearch_database_index_get_path(self), new_path);
+        if (entry_is_folder) {
+            remove_and_free_folder_entry_locked(self, entry, NULL);
+        }
+        else {
+            remove_and_free_file_entry_locked(self, entry, NULL);
+        }
+        return true;
+    }
+
+    // Renames are applied the same way the file system monitor applies them:
+    // the old entry is removed and a new entry is created from disk.
+
+    // 1. Remove the old entry
+    if (entry_is_folder) {
+        remove_and_free_folder_entry_locked(self, entry, NULL);
+    }
+    else {
+        remove_and_free_file_entry_locked(self, entry, NULL);
+    }
+
+    // 2. Remove the parent chain from the size sorted indexes, the newly created
+    //    entries will update the folder sizes
+    g_autoptr(DynamicArray) parent_folders = darray_new(0);
+    for (FsearchDatabaseEntry *parent_tmp = parent; parent_tmp; parent_tmp = db_entry_get_parent(parent_tmp)) {
+        darray_add_item(parent_folders, parent_tmp);
+    }
+    propagate_event(self,
+                    FSEARCH_DATABASE_INDEX_EVENT_ENTRY_DELETED,
+                    parent_folders,
+                    NULL,
+                    DATABASE_INDEX_PROPERTY_FLAG_SIZE,
+                    false);
+
+    // 3. Create the new entry/entries from disk
+    g_autoptr(DynamicArray) folders = NULL;
+    g_autoptr(DynamicArray) files = NULL;
+    if (entry_is_folder) {
+        folders = darray_new(128);
+        files = darray_new(128);
+        if (db_scan_folder(new_path,
+                           parent,
+                           folders,
+                           files,
+                           self->exclude_manager,
+                           self->fanotify_monitor,
+                           self->inotify_monitor,
+                           fsearch_database_include_get_one_file_system(self->include),
+                           NULL,
+                           NULL,
+                           NULL)) {
+            fsearch_database_chunked_array_insert_array(self->folder_chunks, folders);
+            fsearch_database_chunked_array_insert_array(self->file_chunks, files);
+        }
+    }
+    else {
+        FsearchDatabaseEntry *new_entry = db_entry_new_with_attributes(DATABASE_INDEX_PROPERTY_FLAG_DEFAULT,
+                                                                       new_name,
+                                                                       parent,
+                                                                       DATABASE_ENTRY_TYPE_FILE,
+                                                                       DATABASE_INDEX_PROPERTY_SIZE,
+                                                                       size,
+                                                                       DATABASE_INDEX_PROPERTY_MODIFICATION_TIME,
+                                                                       mtime,
+                                                                       DATABASE_INDEX_PROPERTY_NONE);
+        fsearch_database_chunked_array_insert(self->file_chunks, new_entry);
+
+        files = darray_new(1);
+        darray_add_item(files, new_entry);
+    }
+
+    // 4. Notify listeners about the created entries and add the parent chain with the
+    //    updated sizes back to the size sorted indexes
+    propagate_event(self, FSEARCH_DATABASE_INDEX_EVENT_ENTRY_CREATED, folders, files, DATABASE_INDEX_PROPERTY_FLAG_ALL, false);
+    propagate_event(self,
+                    FSEARCH_DATABASE_INDEX_EVENT_ENTRY_CREATED,
+                    parent_folders,
+                    NULL,
+                    DATABASE_INDEX_PROPERTY_FLAG_SIZE,
+                    false);
+
+    return true;
+}
+
 // endregion
 
 static void

@@ -67,6 +67,12 @@ struct FsearchDatabaseWork {
         struct {
             DynamicArray *item_paths;
         };
+
+        // FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED
+        struct {
+            DynamicArray *old_paths;
+            DynamicArray *new_names;
+        };
     };
 
     guint view_id;
@@ -103,6 +109,10 @@ work_free(FsearchDatabaseWork *work) {
         g_string_free(g_steal_pointer(&work->root_path), TRUE);
     case FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_REMOVED:
         g_clear_pointer(&work->item_paths, darray_unref);
+        break;
+    case FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED:
+        g_clear_pointer(&work->old_paths, darray_unref);
+        g_clear_pointer(&work->new_names, darray_unref);
         break;
     case FSEARCH_DATABASE_WORK_SCAN:
         g_clear_object(&work->include_manager);
@@ -264,6 +274,16 @@ fsearch_database_work_new_notify_items_removed(DynamicArray *item_paths) {
     FsearchDatabaseWork *work = work_new();
     work->kind = FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_REMOVED;
     work->item_paths = darray_ref(item_paths);
+
+    return work;
+}
+
+FsearchDatabaseWork *
+fsearch_database_work_new_notify_items_renamed(DynamicArray *old_paths, DynamicArray *new_names) {
+    FsearchDatabaseWork *work = work_new();
+    work->kind = FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED;
+    work->old_paths = darray_ref(old_paths);
+    work->new_names = darray_ref(new_names);
 
     return work;
 }
@@ -431,6 +451,20 @@ fsearch_database_work_notify_items_removed_get_item_paths(FsearchDatabaseWork *w
     return darray_ref(work->item_paths);
 }
 
+DynamicArray *
+fsearch_database_work_notify_items_renamed_get_old_paths(FsearchDatabaseWork *work) {
+    g_return_val_if_fail(work, NULL);
+    g_return_val_if_fail(work->kind == FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED, NULL);
+    return darray_ref(work->old_paths);
+}
+
+DynamicArray *
+fsearch_database_work_notify_items_renamed_get_new_names(FsearchDatabaseWork *work) {
+    g_return_val_if_fail(work, NULL);
+    g_return_val_if_fail(work->kind == FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED, NULL);
+    return darray_ref(work->new_names);
+}
+
 const char *
 fsearch_database_work_to_string(FsearchDatabaseWork *work) {
     g_return_val_if_fail(work, "NULL");
@@ -458,6 +492,8 @@ fsearch_database_work_to_string(FsearchDatabaseWork *work) {
         return "GET_ITEM_INFO";
     case FSEARCH_DATABASE_WORK_MODIFY_SELECTION:
         return "MODIFY_SELECTION";
+    case FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED:
+        return "NOTIFY_ITEMS_RENAMED";
     case FSEARCH_DATABASE_WORK_QUIT:
         return "QUIT";
     default:

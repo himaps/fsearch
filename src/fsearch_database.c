@@ -627,6 +627,24 @@ database_remove_items(FsearchDatabase *self, FsearchDatabaseWork *work) {
     fsearch_database_index_store_remove_paths(self->store, item_paths, self->rescan_manager);
 }
 
+static void
+database_rename_items(FsearchDatabase *self, FsearchDatabaseWork *work) {
+    // DB must be locked
+    g_return_if_fail(self);
+    g_return_if_fail(work);
+
+    g_autoptr(DynamicArray) old_paths = fsearch_database_work_notify_items_renamed_get_old_paths(work);
+    g_return_if_fail(old_paths);
+
+    g_autoptr(DynamicArray) new_names = fsearch_database_work_notify_items_renamed_get_new_names(work);
+    g_return_if_fail(new_names);
+
+    g_autoptr(GMutexLocker) locker = fsearch_database_index_store_get_locker(self->store);
+    g_assert_nonnull(locker);
+
+    fsearch_database_index_store_rename_paths(self->store, old_paths, new_names, self->rescan_manager);
+}
+
 // Clears self->scan_cancellable, unless a newer scan has already replaced it.
 static void
 database_clear_scan_cancellable_if_current(FsearchDatabase *self, FsearchDatabaseWork *work) {
@@ -994,6 +1012,9 @@ handle_work_in_worker_thread_cb(gpointer user_data) {
         break;
     case FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_REMOVED:
         database_remove_items(self, work);
+        break;
+    case FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED:
+        database_rename_items(self, work);
         break;
     case FSEARCH_DATABASE_WORK_SEARCH:
         database_search(self, work);

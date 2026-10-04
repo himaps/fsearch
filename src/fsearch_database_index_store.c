@@ -1162,6 +1162,51 @@ fsearch_database_index_store_remove_paths(FsearchDatabaseIndexStore *store,
     }
 }
 
+void
+fsearch_database_index_store_rename_paths(FsearchDatabaseIndexStore *store,
+                                          DynamicArray *old_paths,
+                                          DynamicArray *new_names,
+                                          FsearchDatabaseRescanManager *rescan_manager) {
+    g_return_if_fail(store);
+    g_return_if_fail(old_paths);
+    g_return_if_fail(new_names);
+
+    const uint32_t num_old_paths = darray_get_num_items(old_paths);
+    if (num_old_paths != darray_get_num_items(new_names)) {
+        g_warning("[index_store] rename_paths: path/name count mismatch (%u != %u)",
+                  num_old_paths,
+                  darray_get_num_items(new_names));
+        return;
+    }
+
+    bool content_changed = false;
+    for (uint32_t i = 0; i < num_old_paths; ++i) {
+        const char *old_path = darray_get_item(old_paths, i);
+        const char *new_name = darray_get_item(new_names, i);
+
+        for (uint32_t j = 0; j < store->indices->len; ++j) {
+            FsearchDatabaseIndex *index = g_ptr_array_index(store->indices, j);
+            g_autoptr(FsearchDatabaseInclude) include = fsearch_database_index_get_include(index);
+            const char *root_path = fsearch_database_include_get_path(include);
+
+            if (fsearch_database_include_get_monitored(include)) {
+                // Monitored indices pick up the rename automatically via the file system monitor
+                continue;
+            }
+
+            // Optimization: Only try to rename if the path falls under this index's root
+            if (g_str_has_prefix(old_path, root_path)) {
+                if (fsearch_database_index_rename_path(index, old_path, new_name)) {
+                    content_changed = true;
+                }
+            }
+        }
+    }
+    if (content_changed) {
+        index_store_content_changed(store);
+    }
+}
+
 GMutexLocker *
 fsearch_database_index_store_get_locker(FsearchDatabaseIndexStore *store) {
     g_return_val_if_fail(store, NULL);

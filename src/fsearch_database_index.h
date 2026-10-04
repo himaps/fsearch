@@ -92,4 +92,7 @@ fsearch_database_index_has_pending_events(FsearchDatabaseIndex *self);
 bool
 fsearch_database_index_remove_path(FsearchDatabaseIndex *self, const char *path, bool *root_removed);
 
+bool
+fsearch_database_index_rename_path(FsearchDatabaseIndex *self, const char *path, const char *new_name);
+
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(FsearchDatabaseIndex, fsearch_database_index_unref)

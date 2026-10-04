@@ -27,6 +27,7 @@ typedef enum FsearchDatabaseWorkKind {
     FSEARCH_DATABASE_WORK_SORT,
     FSEARCH_DATABASE_WORK_GET_ITEM_INFO,
     FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_REMOVED,
+    FSEARCH_DATABASE_WORK_NOTIFY_ITEMS_RENAMED,
     FSEARCH_DATABASE_WORK_MODIFY_SELECTION,
     FSEARCH_DATABASE_WORK_QUIT,
     NUM_FSEARCH_DATABASE_WORK_KINDS,
@@ -58,6 +59,15 @@ fsearch_database_work_rescan_index_finished_get_index(FsearchDatabaseWork *work)
 
 DynamicArray *
 fsearch_database_work_notify_items_removed_get_item_paths(FsearchDatabaseWork *work);
+
+FsearchDatabaseWork *
+fsearch_database_work_new_notify_items_renamed(DynamicArray *old_paths, DynamicArray *new_names);
+
+DynamicArray *
+fsearch_database_work_notify_items_renamed_get_old_paths(FsearchDatabaseWork *work);
+
+DynamicArray *
+fsearch_database_work_notify_items_renamed_get_new_names(FsearchDatabaseWork *work);
 
 FsearchDatabaseWork *
 fsearch_database_work_new_scan(FsearchDatabaseIncludeManager *include_manager,

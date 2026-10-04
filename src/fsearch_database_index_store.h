@@ -85,6 +85,12 @@ fsearch_database_index_store_remove_paths(FsearchDatabaseIndexStore *store,
                                           DynamicArray *item_paths,
                                           FsearchDatabaseRescanManager *rescan_manager);
 
+void
+fsearch_database_index_store_rename_paths(FsearchDatabaseIndexStore *store,
+                                          DynamicArray *old_paths,
+                                          DynamicArray *new_names,
+                                          FsearchDatabaseRescanManager *rescan_manager);
+
 // Getters
 FsearchDatabaseChunkedArray *
 fsearch_database_index_store_get_files(FsearchDatabaseIndexStore *store, FsearchDatabaseIndexProperty sort_order);
