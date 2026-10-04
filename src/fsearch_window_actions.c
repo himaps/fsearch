@@ -278,7 +278,10 @@ fsearch_rename_context_free(FsearchRenameContext *ctx) {
     }
     g_clear_pointer(&ctx->done_old_paths, darray_unref);
     g_clear_pointer(&ctx->done_new_paths, darray_unref);
-    g_clear_pointer(&ctx->error_message, g_string_free);
+    if (ctx->error_message) {
+        g_string_free(ctx->error_message, TRUE);
+        ctx->error_message = NULL;
+    }
     g_clear_object(&ctx->cancellable);
     g_clear_pointer(&ctx->old_paths, g_ptr_array_unref);
     g_clear_pointer(&ctx->new_paths, g_ptr_array_unref);

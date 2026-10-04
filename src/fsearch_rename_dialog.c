@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct FsearchRenameDialog FsearchRenameDialog;
+
 struct FsearchRenameDialog {
     GtkBuilder *builder;
     GtkWidget *dialog;

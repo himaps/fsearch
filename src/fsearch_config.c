@@ -169,6 +169,28 @@ static const FsearchKeyData FILTER_KEYS[] = {
 };
 
 typedef struct {
+    char *name;
+    char *search;
+    char *replace;
+    bool match_case;
+    bool diacritics;
+    bool use_regex;
+    bool ignore_extension;
+    int64_t counter_start;
+} FsearchConfigRenamePresetKeys;
+
+static const FsearchKeyData RENAME_PRESET_KEYS[] = {
+    CONF_STR_OF(FsearchConfigRenamePresetKeys, name, NULL),
+    CONF_STR_OF(FsearchConfigRenamePresetKeys, search, NULL),
+    CONF_STR_OF(FsearchConfigRenamePresetKeys, replace, NULL),
+    CONF_BOOL_OF(FsearchConfigRenamePresetKeys, match_case, false),
+    CONF_BOOL_OF(FsearchConfigRenamePresetKeys, diacritics, false),
+    CONF_BOOL_OF(FsearchConfigRenamePresetKeys, use_regex, false),
+    CONF_BOOL_OF(FsearchConfigRenamePresetKeys, ignore_extension, false),
+    CONF_INT64_OF(FsearchConfigRenamePresetKeys, counter_start, 1),
+};
+
+typedef struct {
     char *path;
     bool active;
     bool one_file_system;
@@ -439,6 +461,40 @@ config_load_filters(GKeyFile *key_file) {
     return filters;
 }
 
+static GPtrArray *
+config_load_rename_presets(GKeyFile *key_file) {
+    GPtrArray *presets = g_ptr_array_new_with_free_func((GDestroyNotify)fsearch_rename_preset_free);
+
+    if (!g_key_file_has_group(key_file, "RenamePresets")) {
+        return presets;
+    }
+
+    for (uint32_t i = 0;; i++) {
+        FsearchConfigRenamePresetKeys preset_keys = {};
+
+        CONFIG_LOAD_OBJECT_KEYS(key_file, "RenamePresets", "preset", i, RENAME_PRESET_KEYS, &preset_keys);
+
+        if (!preset_keys.name || fsearch_string_is_empty(preset_keys.name)) {
+            break;
+        }
+
+        g_ptr_array_add(presets,
+                        fsearch_rename_preset_new(preset_keys.name,
+                                                  preset_keys.search,
+                                                  preset_keys.replace,
+                                                  preset_keys.match_case,
+                                                  preset_keys.diacritics,
+                                                  preset_keys.use_regex,
+                                                  preset_keys.ignore_extension,
+                                                  preset_keys.counter_start));
+
+        g_clear_pointer(&preset_keys.name, g_free);
+        g_clear_pointer(&preset_keys.search, g_free);
+        g_clear_pointer(&preset_keys.replace, g_free);
+    }
+    return presets;
+}
+
 static FsearchDatabaseIncludeManager *
 config_load_includes(GKeyFile *key_file) {
     if (!g_key_file_has_group(key_file, "Database")) {
@@ -661,6 +717,9 @@ config_load(FsearchConfig *config) {
         // Filters
         config->filters = config_load_filters(key_file);
 
+        // Rename presets
+        config->rename_presets = config_load_rename_presets(key_file);
+
         result = true;
         debug_message = "[config] loaded in %f ms";
     }
@@ -686,6 +745,7 @@ config_load_default(FsearchConfig *config) {
     CONFIG_DEFAULT_SECTION(SEARCH_SECTION, config);
 
     config->filters = fsearch_filter_manager_new_with_defaults();
+    config->rename_presets = g_ptr_array_new_with_free_func((GDestroyNotify)fsearch_rename_preset_free);
     config->includes = fsearch_database_include_manager_new_with_defaults();
     config->excludes = fsearch_database_exclude_manager_new_with_defaults();
 
@@ -770,6 +830,31 @@ config_save_excludes(GKeyFile *key_file, FsearchDatabaseExcludeManager *exclude_
                            fsearch_database_exclude_manager_get_exclude_hidden(exclude_manager));
 }
 
+static void
+config_save_rename_presets(GKeyFile *key_file, GPtrArray *presets) {
+    if (!presets) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < presets->len; ++i) {
+        FsearchRenamePreset *preset = g_ptr_array_index(presets, i);
+        if (!preset) {
+            g_assert_not_reached();
+        }
+
+        FsearchConfigRenamePresetKeys preset_keys = {.name = preset->name,
+                                                     .search = preset->options.search,
+                                                     .replace = preset->options.replace,
+                                                     .match_case = preset->options.match_case,
+                                                     .diacritics = preset->options.diacritics,
+                                                     .use_regex = preset->options.use_regex,
+                                                     .ignore_extension = preset->options.ignore_extension,
+                                                     .counter_start = preset->options.counter_start};
+
+        CONFIG_SAVE_OBJECT_KEYS(key_file, "RenamePresets", "preset", i, RENAME_PRESET_KEYS, &preset_keys);
+    }
+}
+
 bool
 config_save(FsearchConfig *config) {
     g_assert(config);
@@ -796,6 +881,9 @@ config_save(FsearchConfig *config) {
 
     // Filters
     config_save_filters(key_file, config->filters);
+
+    // Rename presets
+    config_save_rename_presets(key_file, config->rename_presets);
 
     // Includes
     config_save_includes(key_file, config->includes);
@@ -877,6 +965,12 @@ config_copy(FsearchConfig *config) {
     if (config->filters) {
         copy->filters = fsearch_filter_manager_copy(config->filters);
     }
+    if (config->rename_presets) {
+        copy->rename_presets = g_ptr_array_new_with_free_func((GDestroyNotify)fsearch_rename_preset_free);
+        for (uint32_t i = 0; i < config->rename_presets->len; ++i) {
+            g_ptr_array_add(copy->rename_presets, fsearch_rename_preset_copy(g_ptr_array_index(config->rename_presets, i)));
+        }
+    }
     return copy;
 }
 
@@ -888,6 +982,7 @@ config_free(FsearchConfig *config) {
     g_clear_pointer(&config->file_manager_window_classes, g_free);
     g_clear_pointer(&config->sort_by, g_free);
     g_clear_pointer(&config->filters, fsearch_filter_manager_unref);
+    g_clear_pointer(&config->rename_presets, g_ptr_array_unref);
     g_clear_object(&config->includes);
     g_clear_object(&config->excludes);
     g_clear_pointer(&config, g_free);

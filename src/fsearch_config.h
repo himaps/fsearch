@@ -25,6 +25,7 @@
 #include "fsearch_database_exclude_manager.h"
 #include "fsearch_database_include_manager.h"
 #include "fsearch_filter_manager.h"
+#include "fsearch_rename_engine.h"
 
 typedef struct _FsearchConfig FsearchConfig;
 
@@ -115,6 +116,8 @@ struct _FsearchConfig {
     uint32_t modified_column_pos;
 
     FsearchFilterManager *filters;
+
+    GPtrArray *rename_presets;
 
     FsearchDatabaseIncludeManager *includes;
     FsearchDatabaseExcludeManager *excludes;
