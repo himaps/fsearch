@@ -48,6 +48,9 @@ jobs:
           ninja -C /tmp/libwnck/build
           ninja -C /tmp/libwnck/build install
           ldconfig
+          find /usr -name 'libwnck*.pc' || true
+          pkg-config --modversion libwnck-3 || true
+          pkg-config --debug libwnck-3 2>&1 | tail -25 || true
 
       - name: Checkout
         uses: actions/checkout@v4
