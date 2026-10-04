@@ -572,7 +572,8 @@ fsearch_result_view_draw_row(FsearchResultView *result_view,
             // custom text color: draw the layout directly so the stripe text color
             // applies, search term highlight attributes (if any) still take effect
             gdk_cairo_set_source_rgba(cr, &zebra_text_color);
-            pango_cairo_show_layout(cr, x + ROW_PADDING_X + dx, rect->y + ROW_PADDING_Y, layout);
+            cairo_move_to(cr, x + ROW_PADDING_X + dx, rect->y + ROW_PADDING_Y);
+            pango_cairo_show_layout(cr, layout);
         }
         else {
             gtk_render_layout(context, cr, x + ROW_PADDING_X + dx, rect->y + ROW_PADDING_Y, layout);
