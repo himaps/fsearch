@@ -54,12 +54,7 @@ jobs:
           ninja -C /tmp/libwnck/build install
           ldconfig
           find /usr -name 'libwnck*.pc' || true
-          # /usr/share/pkgconfig is in every pkg-config implementation's default search path
-          cp /usr/lib/aarch64-linux-gnu/pkgconfig/libwnck-3.0.pc /usr/share/pkgconfig/ || true
-          echo "=== libwnck-3.0.pc content ==="
-          cat /usr/lib/aarch64-linux-gnu/pkgconfig/libwnck-3.0.pc || true
-          pkg-config --modversion libwnck-3 || true
-          pkg-config --debug libwnck-3 2>&1 | tail -25 || true
+          pkg-config --modversion libwnck-3.0 || true
 
       - name: Checkout
         uses: actions/checkout@v4

@@ -75,7 +75,7 @@ else
 endif
 
 # libwnck is optional: it enables tracking and switching of file manager windows on X11
-wnck_dep = dependency('libwnck-3', version: '>= 3.30', required: get_option('wnck'))
+wnck_dep = dependency('libwnck-3.0', version: '>= 3.30', required: get_option('wnck'))
 have_wnck = wnck_dep.found()
 
 config_h = configuration_data()

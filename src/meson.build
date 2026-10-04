@@ -86,7 +86,7 @@ fsearch_deps = [
 ]
 
 if have_wnck
-    fsearch_deps += wnck_dep
+    fsearch_deps += dependency('libwnck-3.0', version: '>= 3.30')
 endif
 
 fsearch_enums_headers = [
