@@ -78,10 +78,12 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/}"
             VERSION="${VERSION#v}"
           else
-            VERSION="$(git describe --tags --always 2>/dev/null | sed 's/^v//')"
+            # safe.directory: after actions/checkout the repo dir is owned by a
+            # different uid in the container, which makes plain git calls fail
+            VERSION="$(git -c safe.directory='*' describe --tags --always 2>/dev/null | sed 's/^v//' || true)"
           fi
           if [ -z "$VERSION" ]; then
-            VERSION="$(date +%Y%m%d)-$(git rev-parse --short HEAD 2>/dev/null || echo manual)"
+            VERSION="$(date +%Y%m%d)-$(git -c safe.directory='*' rev-parse --short HEAD 2>/dev/null || echo manual)"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION} for ${{ matrix.arch }}"
