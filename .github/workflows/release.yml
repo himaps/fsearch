@@ -13,19 +13,28 @@ defaults:
   run:
     shell: bash
 
-env:
-  # The bookworm-slim container's pkg-config does not search the multiarch
-  # pkgconfig directory on its own
-  PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
-
 jobs:
   build-deb:
-    name: Build arm64 deb
-    # GitHub's free arm64 runner produces a native aarch64 build, no cross compilation needed
-    runs-on: ubuntu-24.04-arm
+    name: Build ${{ matrix.arch }} packages
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            multiarch: aarch64-linux-gnu
+          - arch: amd64
+            runner: ubuntu-24.04
+            multiarch: x86_64-linux-gnu
+    # Native runners produce native builds, no cross compilation needed
+    runs-on: ${{ matrix.runner }}
     # Build inside Debian bookworm (current oldstable, fully served): glib 2.74,
     # gtk 3.24, glibc 2.36. For very old UOS 20 devices prefer an on-device build.
     container: debian:bookworm-slim
+    env:
+      # The bookworm-slim container's pkg-config does not search the multiarch
+      # pkgconfig directory on its own
+      PKG_CONFIG_PATH: /usr/lib/${{ matrix.multiarch }}/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
 
     steps:
       - name: Install build dependencies
@@ -57,7 +66,6 @@ jobs:
           ninja -C /tmp/libwnck/build
           ninja -C /tmp/libwnck/build install
           ldconfig
-          find /usr -name 'libwnck*.pc' || true
           pkg-config --modversion libwnck-3.0 || true
 
       - name: Checkout
@@ -76,7 +84,7 @@ jobs:
             VERSION="$(date +%Y%m%d)-$(git rev-parse --short HEAD 2>/dev/null || echo manual)"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Building version: ${VERSION}"
+          echo "Building version: ${VERSION} for ${{ matrix.arch }}"
 
       - name: Build
         run: |
@@ -93,17 +101,18 @@ jobs:
       - name: Build deb package
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          PKGDIR="pkg/fsearch_${VERSION}_arm64"
+          ARCH="${{ matrix.arch }}"
+          PKGDIR="pkg/fsearch_${VERSION}_${ARCH}"
           mkdir -p "${PKGDIR}/DEBIAN"
           cp -a staging/. "${PKGDIR}/"
           cat > "${PKGDIR}/DEBIAN/control" <<EOF
           Package: fsearch
           Version: ${VERSION}
-          Architecture: arm64
+          Architecture: ${ARCH}
           Maintainer: FSearch UOS customization
           Section: utils
           Priority: optional
-          Description: A fast file search utility (UOS ARM64 build)
+          Description: A fast file search utility (UOS ${ARCH} build)
            GTK3 based file search utility with UOS desktop integrations:
            hotkey window toggle and file manager window switching.
            Built without strict Depends; install with "dpkg -i".
@@ -113,25 +122,46 @@ jobs:
       - name: Build binary tarball
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          tar -C staging -czf "fsearch_${VERSION}_arm64.tar.gz" .
+          tar -C staging -czf "fsearch_${VERSION}_${{ matrix.arch }}.tar.gz" .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fsearch-${{ matrix.arch }}-${{ steps.ver.outputs.version }}
+          path: |
+            pkg/*.deb
+            *.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-deb
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
 
       - name: Create GitHub release and upload assets
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.ver.outputs.version }}
           REPO: ${{ github.repository }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
           cat > release_notes.md <<'EOF'
-          FSearch UOS ARM64 custom build, based on upstream 0.3.x.
+          FSearch UOS custom build, based on upstream 0.3.x.
 
           - Toggle window visibility with a global hotkey (bind `fsearch` in the control center)
           - Switch back to the last used file manager window (`fsearch --switch-file-manager`)
           - Batch rename for selected search results (F2): regex, counter, ignore extension, presets
+          - Striped result rows with configurable background and text colors
           - Instant result list refresh after renames
 
-          Install: `sudo dpkg -i fsearch_*_arm64.deb` (no strict Depends, see README_UOS.md)
+          Assets: arm64 for UOS ARM64 devices, amd64 for x86_64 (VM) testing.
+          Install: `sudo dpkg -i fsearch_*.deb` (no strict Depends, see README_UOS.md)
           EOF
           NOTES_JSON=$(sed 's/\\/\\\\/g; s/"/\\"/g' release_notes.md | awk 'BEGIN{ORS=""} {print $0 "\\n"}')
 
@@ -140,7 +170,7 @@ jobs:
 
           RELEASE_ID=$(curl -sf -X POST -H "$AUTH" -H "Accept: application/vnd.github+json" \
             "$API/releases" \
-            -d "{\"tag_name\":\"${TAG_NAME}\",\"name\":\"FSearch ${VERSION} (UOS ARM64)\",\"target_commitish\":\"master\",\"body\":\"${NOTES_JSON}\"}" \
+            -d "{\"tag_name\":\"${TAG_NAME}\",\"name\":\"FSearch ${TAG_NAME#v} (UOS)\",\"target_commitish\":\"master\",\"body\":\"${NOTES_JSON}\"}" \
             | grep -o '"id": *[0-9]*' | head -1 | grep -oE '[0-9]+')
 
           if [ -z "$RELEASE_ID" ]; then
@@ -150,18 +180,9 @@ jobs:
           fi
           test -n "$RELEASE_ID"
 
-          for ASSET in "pkg/fsearch_${VERSION}_arm64.deb" "fsearch_${VERSION}_arm64.tar.gz"; do
+          for ASSET in assets/*; do
             curl -sf -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
               --data-binary @"$ASSET" \
               "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=$(basename "$ASSET")" > /dev/null
             echo "uploaded asset: $(basename "$ASSET")"
           done
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: fsearch-arm64-${{ steps.ver.outputs.version }}
-          path: |
-            pkg/*.deb
-            *.tar.gz
-          if-no-files-found: error

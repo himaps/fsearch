@@ -1,7 +1,10 @@
 # FSearch UOS 定制版说明
 
-**最新版本下载（arm64 deb）**：[v0.3.2-uos1 Release](https://github.com/himaps/fsearch/releases/tag/v0.3.2-uos1) ·
-[直接下载 deb](https://github.com/himaps/fsearch/releases/download/v0.3.2-uos1/fsearch_0.3.2-uos1_arm64.deb)
+**最新版本下载**：[v0.3.2-uos2 Release](https://github.com/himaps/fsearch/releases/tag/v0.3.2-uos2) ·
+[arm64 deb（UOS ARM64 设备）](https://github.com/himaps/fsearch/releases/download/v0.3.2-uos2/fsearch_0.3.2-uos2_arm64.deb) ·
+[amd64 deb（x86_64 虚拟机测试）](https://github.com/himaps/fsearch/releases/tag/v0.3.2-uos2)
+
+自 `v0.3.2-uos3` 起，Release 同时提供 **arm64**（UOS ARM64 设备）与 **amd64**（x86_64，供 Windows 虚拟机测试；Debian 12+/Ubuntu 22.04+ 等直接 `dpkg -i`）两种架构的 deb 与二进制 tarball。
 
 安装：`sudo dpkg -i fsearch_*.deb`（CI 产物基于 bookworm/glibc 2.36，老 UOS V20 设备请用下面的本机编译）。
 
