@@ -182,9 +182,10 @@ jobs:
           fi
           test -n "$RELEASE_ID"
 
-          for ASSET in assets/*; do
+          for ASSET in $(find assets -type f); do
             curl -sf -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
               --data-binary @"$ASSET" \
-              "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=$(basename "$ASSET")" > /dev/null
+              "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=$(basename "$ASSET")" > /dev/null \
+              || echo "failed to upload $(basename "$ASSET")"
             echo "uploaded asset: $(basename "$ASSET")"
           done
