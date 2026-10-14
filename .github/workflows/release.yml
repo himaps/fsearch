@@ -40,6 +40,8 @@ jobs:
       # The bookworm-slim container's pkg-config does not search the multiarch
       # pkgconfig directory on its own
       PKG_CONFIG_PATH: /usr/lib/${{ matrix.multiarch }}/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+      # prevent tzdata & co from hanging apt on interactive prompts
+      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - name: Install build dependencies
