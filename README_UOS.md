@@ -6,7 +6,7 @@
 
 自 `v0.3.2-uos3` 起，Release 同时提供 **arm64**（UOS ARM64 设备）与 **amd64**（x86_64，供 Windows 虚拟机测试；Debian 12+/Ubuntu 22.04+ 等直接 `dpkg -i`）两种架构的 deb 与二进制 tarball。
 
-安装：`sudo dpkg -i fsearch_*.deb`（CI 产物基于 bookworm/glibc 2.36，老 UOS V20 设备请用下面的本机编译）。
+安装：`sudo dpkg -i fsearch_*.deb`。**amd64 包在 Ubuntu 20.04 容器中构建**（glibc 2.31 / ICU 66），适用于 Ubuntu 20.04+、Debian 11+、银河麒麟 V10 等 x86_64 系统（实测麒麟 V10 需此版本，bookworm 构建的包因 ICU 72 缺库无法运行）；**arm64 包在 Debian bookworm 容器中构建**（glibc 2.36），老 UOS V20 设备（glibc 2.28）请用本机编译。
 
 本 fork 在上游 [cboxdoerfer/fsearch](https://github.com/cboxdoerfer/fsearch) 0.3.x 基础上，为统信 UOS（ARM64）桌面环境增加了三个功能：
 
