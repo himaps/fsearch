@@ -86,11 +86,14 @@ jobs:
             VERSION="${VERSION#v}"
           else
             # safe.directory: after actions/checkout the repo dir is owned by a
-            # different uid in the container, which makes plain git calls fail
+            # different uid in the container, which makes plain git calls fail.
+            # The checkout is fetched with --no-tags, so describe yields the
+            # short hash; prefix a date so the deb version starts with a digit.
             VERSION="$(git -c safe.directory='*' describe --tags --always 2>/dev/null | sed 's/^v//' || true)"
+            VERSION="$(date +%Y%m%d)-${VERSION}"
           fi
           if [ -z "$VERSION" ]; then
-            VERSION="$(date +%Y%m%d)-$(git -c safe.directory='*' rev-parse --short HEAD 2>/dev/null || echo manual)"
+            VERSION="$(date +%Y%m%d)-manual"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION} for ${{ matrix.arch }}"
