@@ -61,11 +61,20 @@ jobs:
             fi
             sleep 20
           done
-          apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
-            build-essential meson ninja-build pkg-config git curl ca-certificates \
-            patchelf intltool libtool itstool libxml2-utils \
-            libglib2.0-dev libgtk-3-dev libpcre2-dev libicu-dev \
-            libstartup-notification0-dev libxres-dev libwnck-3-dev
+          for attempt in 1 2 3 4 5; do
+            if apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
+              build-essential meson ninja-build pkg-config git curl ca-certificates \
+              patchelf intltool libtool itstool libxml2-utils \
+              libglib2.0-dev libgtk-3-dev libpcre2-dev libicu-dev \
+              libstartup-notification0-dev libxres-dev libwnck-3-dev; then
+              break
+            fi
+            echo "apt-get install failed (attempt $attempt), retrying in 45s" >&2
+            if [ "$attempt" = "5" ]; then
+              exit 1
+            fi
+            sleep 45
+          done
 
       - name: Checkout
         uses: actions/checkout@v4
