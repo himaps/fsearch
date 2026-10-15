@@ -6,7 +6,7 @@
 
 自 `v0.3.2-uos3` 起，Release 同时提供 **arm64**（UOS ARM64 设备）与 **amd64**（x86_64，供 Windows 虚拟机测试；Debian 12+/Ubuntu 22.04+ 等直接 `dpkg -i`）两种架构的 deb 与二进制 tarball。
 
-安装：`sudo dpkg -i fsearch_*.deb`。**amd64 包在 Ubuntu 20.04 容器中构建**（glibc 2.31 / ICU 66），适用于 Ubuntu 20.04+、Debian 11+、银河麒麟 V10 等 x86_64 系统（实测麒麟 V10 需此版本，bookworm 构建的包因 ICU 72 缺库无法运行）；**arm64 包在 Debian bookworm 容器中构建**（glibc 2.36），老 UOS V20 设备（glibc 2.28）请用本机编译。
+安装：`sudo dpkg -i fsearch_*.deb`。两种架构的包均在 **Debian bullseye（glibc 2.31）**容器中构建，且**捆绑了构建所用版本的 ICU**（`/usr/lib/fsearch/` 下 + RPATH 优先加载）——因此无论目标系统的 ICU 是 63（UOS 20）、66（UbuntuKylin 20.04/麒麟 V10）还是更新，都能正常加载，不再出现 `libicuuc.so.XX not found`。代价是包体从 ~630KB 增至 ~12MB（icudata 数据文件占大头）。运行时的 GTK3/GLib/libwnck 仍用系统库（麒麟与 UOS 均自带）。更老的 UOS V20 设备（glibc 2.28）如遇 `GLIBC_2.3x not found`，请用本机编译。
 
 本 fork 在上游 [cboxdoerfer/fsearch](https://github.com/cboxdoerfer/fsearch) 0.3.x 基础上，为统信 UOS（ARM64）桌面环境增加了三个功能：
 
